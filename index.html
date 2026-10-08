@@ -1,0 +1,570 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Cat Match Fever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Pixelify+Sans:wght@400;600&display=swap">
+<style>
+[hidden]{display:none!important}
+
+/* Layout: one centered column. Leaderboard on top, HUD strip, 5x4 card board (4x5 on phones) with overlays for start and win. Single pastel arcade look on purpose. */
+:root{
+  --bg:#f6e4ee; --bg-dot:#efd2e2; --ink:#3a2b4e; --muted:#7a6790;
+  --panel:#fff8fb; --lav:#8f84d8; --lav-dark:#6f63bd; --pink:#ff7fa8; --mint:#79d3bd;
+  --gold:#ffcd55; --silver:#c8cad8; --bronze:#e3a679;
+  --display:"Press Start 2P", "Courier New", monospace;
+  --body:"Pixelify Sans", "Trebuchet MS", system-ui, sans-serif;
+  color-scheme:light;
+}
+html,body{min-height:100%}
+body{
+  margin:0;
+  background-color:var(--bg);
+  background-image:radial-gradient(var(--bg-dot) 2px, transparent 2px);
+  background-size:16px 16px;
+  color:var(--ink); font-family:var(--body); font-size:17px;
+}
+.wrap{max-width:680px; margin:0 auto; padding:20px 16px 36px; display:flex; flex-direction:column; gap:14px}
+h1{font-family:var(--display); font-size:clamp(26px,6vw,42px); line-height:1.35; margin:0; text-align:center; text-wrap:balance; color:var(--ink); text-shadow:3px 3px 0 var(--pink)}
+.tag{margin:10px 0 0; text-align:center; color:var(--ink); font-size:21px; font-weight:600}
+.pix{border:3px solid var(--ink); box-shadow:4px 4px 0 var(--ink); background:var(--panel); border-radius:4px}
+
+/* leaderboard */
+.board-top{padding:10px 12px 12px}
+.board-top h2{font-family:var(--display); font-size:11px; letter-spacing:.08em; margin:0 0 10px; text-align:center; color:var(--lav-dark)}
+.ranks{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:0; padding:0; list-style:none}
+.rank{display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px 4px; border:2px solid var(--ink); border-radius:3px; min-width:0}
+.rank:nth-child(1){background:var(--gold)} .rank:nth-child(2){background:var(--silver)} .rank:nth-child(3){background:var(--bronze)}
+.rank .place{font-family:var(--display); font-size:10px}
+.rank .who{font-weight:600; font-size:16px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+.rank .time{font-family:var(--display); font-size:12px; font-variant-numeric:tabular-nums}
+.board-note{margin:8px 0 0; font-size:13px; color:var(--muted); text-align:center}
+.board-note:empty{display:none}
+
+/* HUD */
+.hud{display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 14px; padding:10px 12px}
+.stat{display:flex; flex-direction:column; gap:3px; min-width:0}
+.stat .k{font-family:var(--display); font-size:8px; letter-spacing:.1em; color:var(--muted)}
+.stat .v{font-family:var(--display); font-size:14px; font-variant-numeric:tabular-nums; white-space:nowrap}
+#timer{color:var(--lav-dark); font-size:18px}
+.toggles{display:flex; gap:6px}
+.tbtn{font-family:var(--display); font-size:8px; padding:7px 8px; border:2px solid var(--ink); background:var(--mint); color:var(--ink); border-radius:3px; cursor:pointer}
+.tbtn[aria-pressed="false"]{background:var(--silver); text-decoration:line-through}
+.tbtn:focus-visible,.card:focus-visible,.btn:focus-visible,input:focus-visible{outline:3px solid var(--pink); outline-offset:2px}
+
+/* board */
+.stage{position:relative}
+.grid{display:grid; grid-template-columns:repeat(5,1fr); gap:10px}
+.card{position:relative; aspect-ratio:4/5; max-width:100%; perspective:600px; border:0; padding:0; background:none; cursor:pointer; font:inherit; color:inherit}
+.card:disabled{cursor:default}
+.inner{position:absolute; inset:0; transform-style:preserve-3d; transition:transform .32s steps(6)}
+.card.flipped .inner{transform:rotateY(180deg)}
+.face{position:absolute; inset:0; backface-visibility:hidden; -webkit-backface-visibility:hidden; border:3px solid var(--ink); border-radius:4px; box-shadow:3px 3px 0 var(--ink); overflow:hidden}
+.back{background-color:var(--lav); background-size:cover; image-rendering:pixelated}
+.card:not(:disabled):hover .back{filter:brightness(1.08)}
+.front{transform:rotateY(180deg); background:var(--panel); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px; padding:4px}
+.front img{width:88%; max-width:100%; image-rendering:pixelated; image-rendering:crisp-edges}
+.front span{font-family:var(--display); font-size:clamp(6px,1.5vw,9px); color:var(--muted); white-space:nowrap}
+.card.gone{animation:vanish .55s steps(8) forwards; pointer-events:none}
+.card.spin{animation:spinout 2s linear forwards; pointer-events:none; z-index:2}
+.card.gone::after{content:""; position:absolute; left:50%; top:50%; width:6px; height:6px; background:var(--gold);
+  box-shadow:-30px -26px 0 var(--gold), 28px -30px 0 var(--pink), -34px 22px 0 var(--mint), 30px 26px 0 var(--gold), 0 -40px 0 var(--pink), 0 40px 0 var(--mint);
+  animation:burst .55s steps(5) forwards}
+.overlay[hidden]{display:none}
+@keyframes vanish{0%{transform:scale(1)}30%{transform:scale(1.12)}100%{transform:scale(.15); opacity:0}}
+@keyframes spinout{0%{transform:rotate(0) scale(1)}75%{transform:rotate(1080deg) scale(.85); opacity:1}100%{transform:rotate(1440deg) scale(0); opacity:0}}
+@keyframes burst{0%{transform:scale(.3)}100%{transform:scale(1.6); opacity:0}}
+
+/* overlays */
+.overlay{position:absolute; inset:-6px; display:flex; align-items:center; justify-content:center; padding:12px; background:color-mix(in srgb, var(--bg) 70%, transparent); z-index:5}
+.dialog{width:min(420px,100%); padding:20px 18px; display:flex; flex-direction:column; gap:14px; text-align:center}
+.dialog h2{font-family:var(--display); font-size:14px; line-height:1.5; margin:0; color:var(--lav-dark)}
+.dialog p{margin:0; line-height:1.45}
+.fields{display:grid; grid-template-columns:1fr 88px; gap:10px; text-align:left}
+.fields label{display:flex; flex-direction:column; gap:5px; font-family:var(--display); font-size:8px; letter-spacing:.08em; color:var(--muted); min-width:0}
+.fields input{font-family:var(--body); font-size:18px; padding:9px 10px; border:3px solid var(--ink); border-radius:3px; background:#fff; color:var(--ink); min-width:0; width:100%; box-sizing:border-box}
+#initial{text-transform:uppercase; text-align:center}
+.err{color:#c2304f; font-size:14px; min-height:1em}
+.btn{font-family:var(--display); font-size:12px; padding:13px 16px; border:3px solid var(--ink); border-radius:4px; background:var(--pink); color:var(--ink); box-shadow:3px 3px 0 var(--ink); cursor:pointer}
+.btn:active{transform:translate(2px,2px); box-shadow:1px 1px 0 var(--ink)}
+.btn.alt{background:var(--mint)}
+.btns{display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+.bigtime{font-family:var(--display); font-size:28px; color:var(--ink); font-variant-numeric:tabular-nums}
+.small{font-size:14px; color:var(--muted)}
+
+@media (max-width:520px){
+  .grid{grid-template-columns:repeat(4,1fr); gap:7px}
+  .rank .who{font-size:14px}
+  .fields{grid-template-columns:1fr 70px}
+}
+@media (prefers-reduced-motion:reduce){
+  .inner{transition:none}
+  .card.gone,.card.spin{animation:fade .4s forwards}
+  .card.gone::after{display:none}
+  @keyframes fade{to{opacity:0}}
+}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Cat Match Fever</h1>
+    <p class="tag">Find all 10 pairs of tabby trouble. Fastest paws win.</p>
+  </header>
+
+  <section class="pix board-top" aria-labelledby="lb-h">
+    <h2 id="lb-h">TOP 3 FASTEST</h2>
+    <ol class="ranks" id="ranks">
+      <li class="rank"><span class="place">1ST</span><span class="who">---</span><span class="time">--:--</span></li>
+      <li class="rank"><span class="place">2ND</span><span class="who">---</span><span class="time">--:--</span></li>
+      <li class="rank"><span class="place">3RD</span><span class="who">---</span><span class="time">--:--</span></li>
+    </ol>
+    <p class="board-note" id="lbnote">Loading scores…</p>
+  </section>
+
+  <section class="pix hud" aria-label="Game status">
+    <div class="stat"><span class="k">PLAYER</span><span class="v" id="who">---</span></div>
+    <div class="stat"><span class="k">TIME</span><span class="v" id="timer">00:00</span></div>
+    <div class="stat"><span class="k">PAIRS</span><span class="v" id="pairs">0/10</span></div>
+    <div class="stat"><span class="k">TURNS</span><span class="v" id="turns">0</span></div>
+    <div class="toggles">
+      <button class="tbtn" id="musicBtn" type="button" aria-pressed="true">MUSIC</button>
+      <button class="tbtn" id="sfxBtn" type="button" aria-pressed="true">SOUND</button>
+    </div>
+  </section>
+
+  <section class="stage" aria-label="Game board">
+    <div class="grid" id="grid"></div>
+
+    <div class="overlay" id="startOv">
+      <form class="pix dialog" id="startForm" novalidate>
+        <h2>Who's playing?</h2>
+        <p class="small">Turn your sound on. Every cat makes its own noise when you flip it.</p>
+        <div class="fields">
+          <label for="first">FIRST NAME<input id="first" name="first" autocomplete="given-name" maxlength="16" placeholder="Alison"></label>
+          <label for="initial">LAST INITIAL<input id="initial" name="initial" maxlength="1" placeholder="T"></label>
+        </div>
+        <div class="err" id="err" role="alert"></div>
+        <button class="btn" type="submit">START GAME</button>
+      </form>
+    </div>
+
+    <div class="overlay" id="winOv" hidden>
+      <div class="pix dialog">
+        <h2 id="winTitle">Board cleared!</h2>
+        <div class="bigtime" id="winTime">00:00</div>
+        <p id="winMsg"></p>
+        <div class="btns">
+          <button class="btn" id="againBtn" type="button">PLAY AGAIN</button>
+          <button class="btn alt" id="newBtn" type="button">NEW PLAYER</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+/* ================= PIXEL ART ================= */
+const PAL = {K:'#272433',G:'#7d8496',L:'#b7bcc9',D:'#4b5062',W:'#ffffff',P:'#f2a1b4',Y:'#f0b23a',
+  M:'#6b2740',R:'#ff6f8f',O:'#ef6f92',B:'#b5733a',C:'#7cc7ea',c:'#dff5ff',Z:'#7468d6',S:'#ffd43b',H:'#ff5f97',N:'#b05cd6',A:'#e8475f'};
+const SZ = 32;
+const grid = () => Array.from({length:SZ}, () => Array(SZ).fill(null));
+const set = (g,x,y,c) => { x|=0; y|=0; if (x>=0 && y>=0 && x<SZ && y<SZ) g[y][x] = c; };
+const rect = (g,x,y,w,h,c) => { for (let j=0;j<h;j++) for (let i=0;i<w;i++) set(g,x+i,y+j,c); };
+const ell = (g,cx,cy,rx,ry,c) => { for (let y=0;y<SZ;y++) for (let x=0;x<SZ;x++){ const dx=(x+.5-cx)/rx, dy=(y+.5-cy)/ry; if (dx*dx+dy*dy<=1) g[y][x]=c; } };
+const stamp = (g,rows,ox,oy) => rows.forEach((r,j) => [...r].forEach((ch,i) => { if (ch !== '.') set(g,ox+i,oy+j,ch); }));
+const pts = (g,list,c) => list.forEach(([x,y]) => set(g,x,y,c));
+function outline(g){
+  const o = g.map(r => r.slice());
+  for (let y=0;y<SZ;y++) for (let x=0;x<SZ;x++){
+    if (g[y][x]) continue;
+    if ((g[y-1]&&g[y-1][x]) || (g[y+1]&&g[y+1][x]) || g[y][x-1] || g[y][x+1]) o[y][x] = 'K';
+  }
+  return o;
+}
+function compose(layers){
+  const out = grid();
+  layers.forEach(([fn, lined]) => {
+    let g = grid(); fn(g); if (lined !== false) g = outline(g);
+    for (let y=0;y<SZ;y++) for (let x=0;x<SZ;x++) if (g[y][x]) out[y][x] = g[y][x];
+  });
+  return out;
+}
+function toURL(g){
+  const cv = document.createElement('canvas'); cv.width = cv.height = SZ;
+  const cx = cv.getContext('2d');
+  for (let y=0;y<SZ;y++) for (let x=0;x<SZ;x++){ const c=g[y][x]; if (c){ cx.fillStyle = PAL[c]; cx.fillRect(x,y,1,1);} }
+  return cv.toDataURL();
+}
+
+const HEAD = ["GG.......GG","GPG.....GPG","GGGDGDGDGGG","GGGGDGDGGGG","GGGGGGGGGGG","DGGGGGGGGGD","LGGGGPGGGGL","LLLLLLLLLLL",".LLLLLLLLL."];
+const EYES = {
+  normal:[[1,4,'Y'],[2,4,'K'],[1,5,'Y'],[2,5,'K'],[8,4,'K'],[9,4,'Y'],[8,5,'K'],[9,5,'Y']],
+  closed:[[1,5,'K'],[2,5,'K'],[8,5,'K'],[9,5,'K']],
+  happy:[[1,5,'K'],[2,4,'K'],[3,5,'K'],[7,5,'K'],[8,4,'K'],[9,5,'K']],
+  wide:[[1,3,'Y'],[2,3,'Y'],[3,3,'Y'],[1,4,'Y'],[2,4,'K'],[3,4,'Y'],[1,5,'Y'],[2,5,'Y'],[3,5,'Y'],[1,3,'W'],
+        [7,3,'W'],[8,3,'Y'],[9,3,'Y'],[7,4,'Y'],[8,4,'K'],[9,4,'Y'],[7,5,'Y'],[8,5,'Y'],[9,5,'Y']],
+  angry:[[1,3,'K'],[2,4,'K'],[1,5,'Y'],[2,5,'K'],[9,3,'K'],[8,4,'K'],[9,5,'Y'],[8,5,'K']],
+  squeeze:[[1,3,'K'],[2,4,'K'],[1,5,'K'],[9,3,'K'],[8,4,'K'],[9,5,'K']]
+};
+const MOUTH = {
+  w:[[3,7,'K'],[4,8,'K'],[5,7,'K'],[6,8,'K'],[7,7,'K']],
+  open:[[4,7,'K'],[5,7,'K'],[6,7,'K'],[4,8,'K'],[5,8,'M'],[6,8,'K']],
+  fangs:[[3,7,'K'],[4,7,'W'],[5,7,'M'],[6,7,'W'],[7,7,'K'],[4,8,'K'],[5,8,'M'],[6,8,'K']],
+  big:[[3,7,'K'],[4,7,'W'],[5,7,'M'],[6,7,'W'],[7,7,'K'],[3,8,'K'],[4,8,'M'],[5,8,'R'],[6,8,'M'],[7,8,'K'],[4,9,'K'],[5,9,'K'],[6,9,'K']],
+  frown:[[4,8,'K'],[5,7,'K'],[6,8,'K']],
+  o:[[5,7,'K'],[5,8,'K']],
+  line:[[4,7,'K'],[5,7,'K'],[6,7,'K']]
+};
+const head = (ox,oy,eyes,mouth) => g => {
+  set(g,ox,oy-1,'G'); set(g,ox+10,oy-1,'G');
+  stamp(g,HEAD,ox,oy);
+  EYES[eyes].forEach(([x,y,c]) => set(g,ox+x,oy+y,c));
+  MOUTH[mouth].forEach(([x,y,c]) => set(g,ox+x,oy+y,c));
+};
+const sit = (cx, tail='right') => g => {
+  if (tail === 'puff'){ rect(g,cx+6,23,5,4,'G'); rect(g,cx+9,14,4,11,'G'); rect(g,cx+9,16,4,1,'D'); rect(g,cx+9,19,4,1,'D'); rect(g,cx+9,22,4,1,'D'); set(g,cx+8,13,'G'); set(g,cx+13,15,'G'); }
+  else if (tail === 'left'){ rect(g,cx-11,25,6,2,'G'); rect(g,cx-12,20,2,7,'G'); pts(g,[[cx-9,25],[cx-9,26]],'D'); rect(g,cx-12,22,2,1,'D'); }
+  else { rect(g,cx+6,25,6,2,'G'); rect(g,cx+10,20,2,6,'G'); pts(g,[[cx+8,25],[cx+8,26]],'D'); rect(g,cx+10,22,2,1,'D'); }
+  ell(g,cx,22,7,6.5,'G');
+  ell(g,cx,22,3.2,4.5,'L');
+  [18,21,24].forEach(y => { rect(g,cx-7,y,2,1,'D'); rect(g,cx+5,y,2,1,'D'); });
+  rect(g,cx-4,27,3,2,'L'); rect(g,cx+1,27,3,2,'L'); set(g,cx-3,28,'D'); set(g,cx+2,28,'D');
+};
+const fx = (rows, x, y) => g => stamp(g, rows, x, y);
+const Zbig = ["ZZZZ","..Z.",".Z..","ZZZZ"], Zsm = ["ZZZ",".Z.","ZZZ"];
+const HEART = [".H.H.","HHHHH","HHHHH",".HHH.","..H.."];
+const ANGER = [".A.A.","AA.AA",".....","AA.AA",".A.A."];
+const NOTE = ["..NNN","..N.N","..N..","NNN..","NN..."];
+const BANG = ["SS","SS","SS","SS","..","SS"];
+const SPARK = [".S.","SSS",".S."];
+
+const SPRITES = {
+  hiss: [
+    [g => { rect(g,24,6,4,10,'G'); [8,11,14].forEach(y => rect(g,24,y,4,1,'D')); pts(g,[[23,7],[28,9],[23,12],[28,13]],'G');
+            ell(g,16,17,9,5.5,'G'); pts(g,[[10,11],[13,10],[16,10],[19,10],[22,11],[11,10],[17,9]],'G');
+            [12,16,20].forEach(x => rect(g,x,12,1,4,'D')); ell(g,16,20,6,2,'L');
+            [9,12,19,22].forEach(x => rect(g,x,21,2,7,'G')); [9,12,19,22].forEach(x => rect(g,x,27,2,1,'L')); }],
+    [head(1,11,'angry','fangs')],
+    [fx(["S.S",".S.","S.S"],3,4), false]
+  ],
+  stretch: [
+    [g => { rect(g,26,7,2,8,'G'); rect(g,27,5,2,3,'G'); pts(g,[[26,9],[27,9],[26,12],[27,12]],'D');
+            ell(g,21,16,6,5,'G'); ell(g,15,21,7,3.2,'G');
+            rect(g,20,20,2,8,'G'); rect(g,24,19,2,9,'G'); rect(g,20,27,2,1,'L'); rect(g,24,27,2,1,'L');
+            rect(g,2,25,12,2,'G'); rect(g,2,25,2,2,'L');
+            [18,21,24].forEach(x => rect(g,x,12,1,3,'D')); }],
+    [head(3,16,'happy','w')],
+    [fx(NOTE,13,4)], [fx(NOTE,6,8)]
+  ],
+  kibble: [
+    [sit(13,'left')],
+    [head(8,7,'normal','open')],
+    [g => { ell(g,25.5,25.5,4.5,2.4,'B'); pts(g,[[23,24],[26,23],[28,24],[25,25]],'M'); rect(g,20,25,11,3,'O'); rect(g,21,28,9,1,'O'); rect(g,20,25,11,1,'P'); }],
+    [fx(HEART,22,6)]
+  ],
+  grumpy: [
+    [sit(15,'puff')],
+    [head(10,7,'angry','frown')],
+    [fx(ANGER,3,3)]
+  ],
+  hairball: [
+    [sit(12,'left')],
+    [head(7,7,'squeeze','open')],
+    [g => { ell(g,25,22,3.3,2.8,'G'); pts(g,[[24,21],[26,22],[25,23],[23,22],[27,21]],'D'); pts(g,[[22,20],[28,23],[26,19]],'G'); }],
+    [fx(SPARK,20,13), false], [fx(SPARK,28,15), false], [fx(SPARK,24,26), false]
+  ],
+  nap: [
+    [g => { ell(g,17,21,11,7,'G'); [[14,15],[18,14],[22,15],[25,17]].forEach(([x,y]) => rect(g,x,y,1,3,'D'));
+            rect(g,10,25,16,1,'K'); [12,16,20,24].forEach(x => rect(g,x,26,1,2,'D')); rect(g,8,26,2,2,'L'); }],
+    [head(3,16,'closed','w')],
+    [fx(Zbig,21,4)], [fx(Zsm,27,10)]
+  ],
+  alert: [
+    [sit(16)],
+    [head(11,7,'wide','o')],
+    [fx(BANG,25,1)]
+  ],
+  yawn: [
+    [sit(16)],
+    [head(11,7,'closed','big')],
+    [fx(["..S.",".S..","S..."],5,5), false], [fx(["S...",".S..","..S."],24,5), false]
+  ],
+  loaf: [
+    [g => { ell(g,16,24,12,4.6,'G'); rect(g,6,26,21,3,'G'); [8,12,20,24].forEach(x => rect(g,x,21,1,3,'D')); }],
+    [g => { rect(g,18,27,9,2,'G'); [21,24].forEach(x => rect(g,x,27,1,2,'D')); rect(g,26,27,1,2,'L'); }],
+    [head(11,12,'happy','w')],
+    [fx(HEART,25,5)], [fx(["S.S.S"],4,8), false], [fx([".S.S."],4,10), false]
+  ],
+  chomp: [
+    [sit(14)],
+    [head(9,7,'normal','line')],
+    [g => { rect(g,15,14,7,3,'C'); rect(g,19,11,5,4,'C'); rect(g,21,16,4,3,'C'); pts(g,[[24,12],[18,13],[25,18]],'C');
+            pts(g,[[20,12],[17,15],[22,17],[21,13]],'c'); }],
+    [fx(SPARK,26,8), false], [fx(["S","S"],28,14), false]
+  ]
+};
+const CATS = [
+  {id:'hiss', label:'HISS!', sound:'hiss'},
+  {id:'stretch', label:'STRETCH', sound:'trill'},
+  {id:'kibble', label:'KIBBLE?', sound:'meow'},
+  {id:'grumpy', label:'GRRR', sound:'growl'},
+  {id:'hairball', label:'HAIRBALL', sound:'hack'},
+  {id:'nap', label:'ZZZ', sound:'snore'},
+  {id:'alert', label:'ALERT!', sound:'oiia'},
+  {id:'yawn', label:'YAWN', sound:'yawn'},
+  {id:'loaf', label:'LOAF', sound:'purr'},
+  {id:'chomp', label:'CHOMP', sound:'chew'}
+];
+CATS.forEach(c => c.img = toURL(compose(SPRITES[c.id])));
+
+function backURL(){
+  const w=24, h=30, cv=document.createElement('canvas'); cv.width=w; cv.height=h; const x=cv.getContext('2d');
+  x.fillStyle='#8f84d8'; x.fillRect(0,0,w,h);
+  x.fillStyle='#8075cc'; for (let j=0;j<h;j+=4) for (let i=(j/4)%2*2;i<w;i+=4) x.fillRect(i,j,2,2);
+  const paw=["...WW.WW...","...WW.WW...",".WW.....WW.",".WW.....WW.","....WWW....","...WWWWW...","..WWWWWWW..","..WWWWWWW..","...WW.WW..."];
+  x.fillStyle='#8f84d8'; x.fillRect(5,9,14,12);
+  x.fillStyle='#fff1f7'; paw.forEach((r,j)=>[...r].forEach((ch,i)=>{ if(ch==='W') x.fillRect(6+i,10+j,1,1); }));
+  return cv.toDataURL();
+}
+const BACK = backURL();
+
+/* ================= AUDIO ================= */
+let ac=null, sfxGain, musicGain, noiseBuf;
+let musicOn=true, sfxOn=true;
+function initAudio(){
+  if (ac) { if (ac.state==='suspended') ac.resume(); return; }
+  const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  ac = new AC();
+  const master = ac.createGain(); master.gain.value = .9; master.connect(ac.destination);
+  sfxGain = ac.createGain(); sfxGain.gain.value = sfxOn ? 1 : 0; sfxGain.connect(master);
+  musicGain = ac.createGain(); musicGain.gain.value = musicOn ? 1 : 0; musicGain.connect(master);
+  noiseBuf = ac.createBuffer(1, ac.sampleRate*2, ac.sampleRate);
+  const d = noiseBuf.getChannelData(0); for (let i=0;i<d.length;i++) d[i] = Math.random()*2-1;
+}
+function ramp(param, pts, t){ pts.forEach(([dt,v],i) => i ? param.linearRampToValueAtTime(v,t+dt) : param.setValueAtTime(v,t+dt)); }
+function chain(src, {t, dur, gain=.2, attack=.01, release=.08, filter, trem, dest}){
+  let node = src; const end = t + dur;
+  if (filter){ const f = ac.createBiquadFilter(); f.type = filter.type; f.Q.value = filter.Q || 1; ramp(f.frequency, filter.freqs, t); node.connect(f); node = f; }
+  if (trem){ const am = ac.createGain(); am.gain.value = 1 - trem.depth/2; const l = ac.createOscillator(); l.frequency.value = trem.rate;
+    const lg = ac.createGain(); lg.gain.value = trem.depth/2; l.connect(lg).connect(am.gain); l.start(t); l.stop(end+.05); node.connect(am); node = am; }
+  const g = ac.createGain();
+  g.gain.setValueAtTime(.0001, t); g.gain.linearRampToValueAtTime(gain, t+attack);
+  g.gain.setValueAtTime(gain, Math.max(t+attack, end-release)); g.gain.linearRampToValueAtTime(.0001, end);
+  node.connect(g).connect(dest || sfxGain);
+  return end;
+}
+function voice(o){
+  const osc = ac.createOscillator(); osc.type = o.type || 'square'; ramp(osc.frequency, o.freqs, o.t);
+  if (o.vib){ const l = ac.createOscillator(); l.frequency.value = o.vib.rate; const lg = ac.createGain(); lg.gain.value = o.vib.depth; l.connect(lg).connect(osc.frequency); l.start(o.t); l.stop(o.t+o.dur+.05); }
+  const end = chain(osc, o); osc.start(o.t); osc.stop(end+.05);
+}
+function noise(o){
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const end = chain(s, o); s.start(o.t, Math.random()*1.5); s.stop(end+.05);
+}
+const N = m => 440*Math.pow(2,(m-69)/12);
+function meow(t, base){
+  voice({t, type:'sawtooth', freqs:[[0,base*.85],[.12,base*1.22],[.3,base*1.05],[.46,base*.8]], dur:.48, gain:.42, attack:.03, release:.18,
+    filter:{type:'bandpass', Q:2.5, freqs:[[0,700],[.15,1800],[.46,850]]}, vib:{rate:7, depth:8}});
+}
+function oiia(t, cycles){
+  const o = ac.createOscillator(); o.type = 'square';
+  const f = ac.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 1.6;
+  const g = ac.createGain(); g.gain.setValueAtTime(.0001, t);
+  const pan = ac.createStereoPanner ? ac.createStereoPanner() : null;
+  const segs = [[.12,392,700],[.11,587,2300],[.11,587,2300],[.16,466,1150]];
+  let tt = t;
+  for (let c=0;c<cycles;c++) segs.forEach(([d,f0,form]) => {
+    o.frequency.setValueAtTime(f0, tt); o.frequency.linearRampToValueAtTime(f0*1.05, tt+d*.9);
+    f.frequency.setTargetAtTime(form, tt, .015);
+    g.gain.setTargetAtTime(.38, tt, .01); g.gain.setTargetAtTime(.06, tt+d-.035, .01);
+    tt += d;
+  });
+  g.gain.setTargetAtTime(.0001, tt, .03);
+  o.connect(f).connect(g);
+  if (pan && cycles > 1){ const l = ac.createOscillator(); l.frequency.value = 3; const lg = ac.createGain(); lg.gain.value = .85; l.connect(lg).connect(pan.pan); l.start(t); l.stop(tt+.3); g.connect(pan).connect(sfxGain); }
+  else g.connect(sfxGain);
+  o.start(t); o.stop(tt+.3);
+}
+const SFX = {
+  hiss(t){ noise({t, dur:.06, gain:.22, attack:.004, release:.04, filter:{type:'bandpass', Q:2, freqs:[[0,1500]]}});
+           noise({t:t+.03, dur:.75, gain:.3, attack:.05, release:.35, filter:{type:'highpass', Q:.8, freqs:[[0,3000],[.7,2200]]}}); },
+  trill(t){ voice({t, type:'triangle', freqs:[[0,330],[.18,440],[.42,560]], dur:.5, gain:.3, attack:.02, release:.15, vib:{rate:28, depth:35}});
+            voice({t:t+.56, type:'triangle', freqs:[[0,480],[.2,640]], dur:.3, gain:.24, attack:.02, release:.12, vib:{rate:6, depth:10}}); },
+  meow(t){ meow(t,560); meow(t+.5,650); },
+  growl(t){ voice({t, type:'sawtooth', freqs:[[0,95],[.5,112],[.95,85]], dur:1, gain:.4, attack:.08, release:.25, filter:{type:'lowpass', Q:4, freqs:[[0,380],[.5,650],[1,320]]}, trem:{rate:22, depth:.7}});
+            noise({t, dur:1, gain:.1, attack:.1, release:.3, filter:{type:'lowpass', Q:1, freqs:[[0,500]]}, trem:{rate:22, depth:.8}}); },
+  hack(t){ for (let i=0;i<3;i++){ const tt = t+i*.17;
+             noise({t:tt, dur:.08, gain:.26, attack:.005, release:.05, filter:{type:'bandpass', Q:2, freqs:[[0,1400+i*300]]}});
+             voice({t:tt, type:'square', freqs:[[0,260+i*70],[.07,200+i*70]], dur:.08, gain:.1, attack:.005, release:.04, filter:{type:'lowpass', freqs:[[0,1500]]}}); }
+           voice({t:t+.6, type:'sine', freqs:[[0,350],[.1,1100]], dur:.13, gain:.32, attack:.005, release:.05});
+           voice({t:t+.74, type:'sine', freqs:[[0,2093]], dur:.18, gain:.12, attack:.005, release:.15});
+           voice({t:t+.84, type:'sine', freqs:[[0,2637]], dur:.22, gain:.12, attack:.005, release:.18}); },
+  snore(t){ noise({t, dur:.9, gain:.32, attack:.6, release:.2, filter:{type:'lowpass', Q:6, freqs:[[0,260],[.9,620]]}, trem:{rate:30, depth:.7}});
+            voice({t:t+.95, type:'sine', freqs:[[0,900],[.25,1500],[.6,800]], dur:.6, gain:.18, attack:.05, release:.2}); },
+  oiia(t){ oiia(t,1); },
+  yawn(t){ voice({t, type:'sawtooth', freqs:[[0,320],[.35,560],[.8,430],[1.3,250]], dur:1.35, gain:.3, attack:.1, release:.35,
+            filter:{type:'lowpass', Q:5, freqs:[[0,500],[.4,2200],[1,1200],[1.35,400]]}, vib:{rate:5, depth:6}}); },
+  purr(t){ noise({t, dur:1.6, gain:.6, attack:.2, release:.4, filter:{type:'lowpass', Q:3, freqs:[[0,340]]}, trem:{rate:24, depth:.95}});
+           voice({t, type:'triangle', freqs:[[0,95]], dur:1.6, gain:.16, attack:.2, release:.4, trem:{rate:24, depth:.95}}); },
+  chew(t){ for (let i=0;i<7;i++){ const tt = t+i*.13+(i%2?.02:0);
+             noise({t:tt, dur:.05, gain:.32, attack:.003, release:.04, filter:{type:'bandpass', Q:3, freqs:[[0, i%2?1600:2600]]}});
+             noise({t:tt+.06, dur:.03, gain:.08, attack:.003, release:.02, filter:{type:'highpass', freqs:[[0,6000]]}}); } },
+  chime(t){ [1047,1319,1568,2093].forEach((f,i) => { voice({t:t+i*.07, type:'triangle', freqs:[[0,f]], dur:.42, gain:.22, attack:.005, release:.32});
+              voice({t:t+i*.07, type:'square', freqs:[[0,f]], dur:.2, gain:.04, attack:.005, release:.15}); });
+            for (let i=0;i<6;i++) voice({t:t+.25+i*.05, type:'sine', freqs:[[0,2600+Math.random()*1600]], dur:.12, gain:.08, attack:.003, release:.1}); },
+  buzz(t){ voice({t, type:'square', freqs:[[0,233]], dur:.16, gain:.12, attack:.01, release:.05, filter:{type:'lowpass', freqs:[[0,800]]}});
+           voice({t:t+.18, type:'square', freqs:[[0,196]], dur:.26, gain:.12, attack:.01, release:.1, filter:{type:'lowpass', freqs:[[0,800]]}}); },
+  win(t){ [72,76,79,84,79,84,88].forEach((m,i) => voice({t:t+i*.12, type:'square', freqs:[[0,N(m)]], dur:i===6?.6:.11, gain:.12, attack:.005, release:i===6?.4:.04, filter:{type:'lowpass', freqs:[[0,3000]]}}));
+          [60,64,67].forEach(m => voice({t:t+.72, type:'triangle', freqs:[[0,N(m)]], dur:.7, gain:.14, attack:.01, release:.5})); }
+};
+function play(name, ...args){ if (!ac) return; try { SFX[name](ac.currentTime+.02, ...args); } catch(e){} }
+function playOiia(cycles){ if (!ac) return; try { oiia(ac.currentTime+.02, cycles); } catch(e){} }
+
+/* background chiptune: 8 bars of F major, looping */
+const LEAD = [72,null,69,72,77,null,76,74, 74,null,70,74,77,null,74,null, 76,null,72,76,79,null,77,76, 77,null,72,null,69,null,null,null,
+              74,74,77,null,74,null,70,null, 72,72,77,null,72,null,69,null, 70,null,74,null,76,null,79,null, 77,null,null,81,77,null,null,null];
+const ROOTS = [53,46,48,53,46,53,48,53];
+const EIGHTH = 60/112/2;
+let musicTimer=null, nextT=0, step=0;
+function playStep(s, t){
+  const m = LEAD[s];
+  if (m) voice({t, type:'square', freqs:[[0,N(m)]], dur:EIGHTH*.85, gain:.045, attack:.005, release:.06, filter:{type:'lowpass', freqs:[[0,2200]]}, dest:musicGain});
+  const r = ROOTS[Math.floor(s/8)], b = [r,null,r+7,null,r+12,null,r+7,null][s%8];
+  if (b) voice({t, type:'triangle', freqs:[[0,N(b)]], dur:EIGHTH*1.6, gain:.11, attack:.005, release:.1, dest:musicGain});
+  if (s%2) noise({t, dur:.025, gain:.018, attack:.002, release:.02, filter:{type:'highpass', freqs:[[0,7000]]}, dest:musicGain});
+}
+function startMusic(){ if (!ac || musicTimer) return; nextT = ac.currentTime+.1; step = 0;
+  musicTimer = setInterval(() => { while (nextT < ac.currentTime+.2){ playStep(step, nextT); nextT += EIGHTH; step = (step+1)%64; } }, 40); }
+function stopMusic(){ clearInterval(musicTimer); musicTimer = null; }
+
+/* ================= LEADERBOARD ================= */
+const $ = id => document.getElementById(id);
+const fmt = ms => { const s = Math.floor(ms/1000); return String(Math.floor(s/60)).padStart(2,'0') + ':' + String(s%60).padStart(2,'0'); };
+let topScores = [], shared = false;
+const LS = 'cmf-scores';
+const lsGet = () => { try { return JSON.parse(localStorage.getItem(LS)) || []; } catch(e){ return []; } };
+const lsAdd = s => { try { const a = lsGet(); a.push(s); a.sort((x,y)=>x.ms-y.ms); localStorage.setItem(LS, JSON.stringify(a.slice(0,10))); } catch(e){} };
+function renderBoard(list, note){
+  topScores = list.slice(0,3);
+  [...$('ranks').children].forEach((li,i) => {
+    const s = topScores[i];
+    li.querySelector('.who').textContent = s ? s.name : '---';
+    li.querySelector('.time').textContent = s ? fmt(s.ms) : '--:--';
+  });
+  if (note !== undefined) $('lbnote').textContent = note;
+}
+const clean = list => (Array.isArray(list) ? list : []).filter(s => s && typeof s.ms === 'number' && typeof s.name === 'string');
+async function loadBoard(){
+  try {
+    const r = await fetch('/api/scores', {cache:'no-store'});
+    if (!r.ok) throw new Error(r.status);
+    const list = clean(await r.json());
+    shared = true;
+    renderBoard(list, list.length ? 'Shared with everyone who plays.' : 'No times yet. Be the first!');
+  } catch(e){
+    if (!shared) renderBoard(lsGet(), 'Scores are saved on this device.');
+  }
+}
+loadBoard();
+setInterval(() => { if (!playing) loadBoard(); }, 30000);
+async function saveScore(s){
+  if (shared){
+    try {
+      const r = await fetch('/api/scores', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:s.name, ms:s.ms, turns:s.turns})});
+      if (r.ok){ renderBoard(clean(await r.json()), 'Shared with everyone who plays.'); return 'shared'; }
+    } catch(e){}
+  }
+  lsAdd(s); if (!shared) renderBoard(lsGet()); return 'local';
+}
+
+/* ================= GAME ================= */
+let cards = [], first = null, lock = false, playing = false, turns = 0, pairs = 0, t0 = 0, tick = null, player = '';
+try { const p = JSON.parse(localStorage.getItem('cmf-player')); if (p){ $('first').value = p.first || ''; $('initial').value = p.initial || ''; } } catch(e){}
+
+function shuffle(a){ for (let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]] = [a[j],a[i]]; } return a; }
+function deal(){
+  const gridEl = $('grid'); gridEl.innerHTML = '';
+  cards = shuffle([...CATS, ...CATS]).map((cat, i) => {
+    const el = document.createElement('button'); el.type = 'button'; el.className = 'card'; el.disabled = !playing;
+    el.setAttribute('aria-label', 'Face-down card ' + (i+1));
+    el.innerHTML = '<div class="inner"><div class="face back"></div><div class="face front"><img alt=""><span></span></div></div>';
+    el.querySelector('.back').style.backgroundImage = 'url(' + BACK + ')';
+    el.querySelector('img').src = cat.img; el.querySelector('span').textContent = cat.label;
+    const c = {cat, el, open:false, matched:false};
+    el.addEventListener('click', () => flip(c));
+    gridEl.appendChild(el);
+    return c;
+  });
+}
+function hud(){ $('pairs').textContent = pairs + '/10'; $('turns').textContent = turns; }
+function flip(c){
+  if (!playing || lock || c.open || c.matched) return;
+  c.open = true; c.el.classList.add('flipped'); c.el.setAttribute('aria-label', c.cat.label);
+  if (c.cat.id === 'alert') playOiia(1); else play(c.cat.sound);
+  if (!first){ first = c; return; }
+  const a = first; first = null; turns++; hud(); lock = true;
+  if (a.cat.id === c.cat.id){
+    const alert = c.cat.id === 'alert';
+    setTimeout(() => {
+      const done = () => { a.matched = c.matched = true; pairs++; hud(); lock = false; if (pairs === 10) win(); };
+      if (alert){ playOiia(4); a.el.classList.add('spin'); c.el.classList.add('spin'); setTimeout(() => { play('chime'); done(); }, 2000); }
+      else { play('chime'); a.el.classList.add('gone'); c.el.classList.add('gone'); setTimeout(done, 560); }
+    }, alert ? 650 : 700);
+  } else {
+    setTimeout(() => {
+      play('buzz');
+      setTimeout(() => { [a,c].forEach(x => { x.open = false; x.el.classList.remove('flipped'); x.el.setAttribute('aria-label','Face-down card'); }); lock = false; }, 450);
+    }, 800);
+  }
+}
+function start(){
+  initAudio();
+  playing = true; first = null; lock = false; turns = 0; pairs = 0; hud();
+  deal();
+  $('who').textContent = player;
+  $('startOv').hidden = true; $('winOv').hidden = true;
+  t0 = performance.now(); $('timer').textContent = '00:00';
+  clearInterval(tick); tick = setInterval(() => { $('timer').textContent = fmt(performance.now()-t0); }, 200);
+  stopMusic(); startMusic();
+}
+async function win(){
+  const ms = Math.round(performance.now()-t0);
+  playing = false; clearInterval(tick); $('timer').textContent = fmt(ms);
+  stopMusic(); play('win');
+  const third = topScores[2];
+  const madeIt = topScores.length < 3 || ms < third.ms;
+  const place = topScores.filter(s => s.ms <= ms).length + 1;
+  $('winTitle').textContent = madeIt ? (place === 1 ? 'New #1 time!' : 'You made the top 3!') : 'Board cleared!';
+  $('winTime').textContent = fmt(ms);
+  $('winMsg').textContent = player + ', you found all 10 pairs in ' + turns + ' turns.';
+  $('winOv').hidden = false;
+  const where = await saveScore({name: player, ms, turns, at: Date.now()});
+  if (where === 'local') $('winMsg').textContent += ' Your time is saved on this device.';
+}
+$('startForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = $('first').value.trim().replace(/\s+/g,' '), i = $('initial').value.trim().toUpperCase();
+  if (!/^[\p{L}][\p{L}'\- ]{0,15}$/u.test(f)){ $('err').textContent = 'Type your first name to start.'; $('first').focus(); return; }
+  if (!/^\p{L}$/u.test(i)){ $('err').textContent = 'Add the first letter of your last name.'; $('initial').focus(); return; }
+  $('err').textContent = '';
+  const nice = f.charAt(0).toUpperCase() + f.slice(1);
+  player = nice + ' ' + i + '.';
+  try { localStorage.setItem('cmf-player', JSON.stringify({first: nice, initial: i})); } catch(e){}
+  start();
+});
+$('againBtn').addEventListener('click', start);
+$('newBtn').addEventListener('click', () => { $('winOv').hidden = true; $('startOv').hidden = false; $('first').value = ''; $('initial').value = ''; $('first').focus(); });
+$('musicBtn').addEventListener('click', e => { musicOn = !musicOn; e.currentTarget.setAttribute('aria-pressed', musicOn); if (musicGain) musicGain.gain.value = musicOn ? 1 : 0; });
+$('sfxBtn').addEventListener('click', e => { sfxOn = !sfxOn; e.currentTarget.setAttribute('aria-pressed', sfxOn); if (sfxGain) sfxGain.gain.value = sfxOn ? 1 : 0; });
+
+deal();
+})();
+</script>
+</body>
+</html>
