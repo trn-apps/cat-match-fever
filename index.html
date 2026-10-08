@@ -472,9 +472,11 @@ async function loadBoard(){
   }
 }
 loadBoard();
-setInterval(() => { if (!playing) loadBoard(); }, 30000);
+setInterval(() => { if (!playing) loadBoard(); }, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadBoard(); });
+window.addEventListener('focus', loadBoard);
 async function saveScore(s){
-  if (shared){
+  {
     try {
       const r = await fetch('/api/scores', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({name:s.name, ms:s.ms, turns:s.turns})});
       if (r.ok){ renderBoard(clean(await r.json()), 'Shared with everyone who plays.'); return 'shared'; }
